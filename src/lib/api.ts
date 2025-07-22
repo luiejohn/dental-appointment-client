@@ -2,15 +2,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
-async function fetcher<T>(url: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${url}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
+async function fetcher<T>(url: string, opts: RequestInit = {}): Promise<T> {
+  const full = `${BASE_URL}${url}`;
+
+  const headers = new Headers(opts.headers);
+  headers.set("Content-Type", "application/json");
+
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
+  const res = await fetch(full, {
     ...opts,
+    headers,
   });
+
   if (!res.ok) {
-    const message = await res.text();
-    throw new Error(message || "Network response was not ok");
+    const text = await res.text();
+    throw new Error(text || res.statusText);
   }
   return res.json();
 }
