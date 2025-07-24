@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
-async function fetcher<T>(url: string, opts: RequestInit = {}): Promise<T> {
+export async function fetcher<T>(
+  url: string,
+  opts: RequestInit = {}
+): Promise<T> {
   const full = `${BASE_URL}${url}`;
 
   const headers = new Headers(opts.headers);
@@ -57,13 +60,24 @@ export interface Dentist {
   profilePhotoUrl?: string;
 }
 
-export interface Appointment {
-  id: string;
-  userId: string;
+export interface BookAppointmentInput {
   dentistId: string;
   startTs: string;
   endTs: string;
+}
+
+export interface AvailabilityParams {
+  dentistId: string;
+  date: string;
+}
+
+export interface Appointment {
+  id: string;
+  userId: string;
+  startTs: string;
+  endTs: string;
   status: string;
+  dentist: Dentist;
 }
 
 export function useRegister() {
@@ -92,6 +106,7 @@ export function useMe() {
   return useQuery<UserProfile, Error>({
     queryKey: ["me"],
     queryFn: () => fetcher<UserProfile>("/auth/me"),
+    retry: false,
   });
 }
 
@@ -123,13 +138,43 @@ export function useAppointments() {
 
 export function useBookAppointment() {
   const qc = useQueryClient();
-  return useMutation<Appointment, Error, Omit<Appointment, "id" | "userId">>({
+  return useMutation<Appointment, Error, BookAppointmentInput>({
     mutationFn: (data) =>
       fetcher<Appointment>("/appointments", {
         method: "POST",
         body: JSON.stringify(data),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["appointments"] }),
+  });
+}
+
+export function useUpdateAppointment() {
+  const qc = useQueryClient();
+  return useMutation<
+    Appointment,
+    Error,
+    { id: string; dentistId: string; startTs: string; endTs: string }
+  >({
+    mutationFn: ({ id, dentistId, startTs, endTs }) =>
+      fetcher<Appointment>(`/appointments/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ dentistId, startTs, endTs }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+    },
+  });
+}
+
+export function useAvailability(params: AvailabilityParams) {
+  const { dentistId, date } = params;
+  return useQuery<Appointment[], Error>({
+    queryKey: ["availability", dentistId, date],
+    queryFn: () =>
+      fetcher<Appointment[]>(
+        `/appointments/availability?dentistId=${dentistId}&date=${date}`
+      ),
+    enabled: Boolean(dentistId && date),
   });
 }
 
@@ -152,10 +197,25 @@ export function useRescheduleAppointment() {
 export function useCancelAppointment() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: (id) =>
-      fetcher<void>(`/appointments/${id}`, {
-        method: "DELETE",
-      }),
+    mutationFn: async (id) => {
+      const url = `${BASE_URL}/appointments/${id}`;
+      const headers = new Headers();
+      headers.set("Content-Type", "application/json");
+
+      if (typeof window !== "undefined") {
+        const token = localStorage.getItem("token");
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+      }
+
+      const res = await fetch(url, { method: "DELETE", headers });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+
+      return;
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["appointments"] }),
   });
 }

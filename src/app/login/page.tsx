@@ -1,14 +1,16 @@
 "use client";
+
 import { useForm } from "react-hook-form";
-import { useLogin } from "../../lib/api";
+import { useLogin, fetcher, UserProfile } from "../../lib/api";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../components/shared/button";
 import { Input } from "../../components/shared/input";
 
-type LoginForm = {
+interface LoginForm {
   email: string;
   password: string;
-};
+}
 
 export default function LoginPage() {
   const {
@@ -16,18 +18,27 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>();
+
   const mutation = useLogin();
   const router = useRouter();
+  const qc = useQueryClient();
 
-  async function onSubmit(data: LoginForm) {
+  const onSubmit = async (data: LoginForm) => {
     try {
       const res = await mutation.mutateAsync(data);
       localStorage.setItem("token", res.token);
+
+      const me = await fetcher<UserProfile>("/auth/me");
+      qc.setQueryData(["me"], me);
+
       router.push("/dashboard");
-    } catch (err: unknown) {
-      console.error(err);
+    } catch (error: unknown) {
+      console.log(error);
     }
-  }
+  };
+
+  const isLoading = mutation.status === "pending";
+  const isError = mutation.status === "error";
 
   return (
     <form
@@ -39,20 +50,34 @@ export default function LoginPage() {
       <Input
         type="email"
         placeholder="Email"
-        {...register("email", { required: true })}
+        {...register("email", { required: "Email is required" })}
       />
-      {errors.email && <p className="text-red-600">Email is required</p>}
+      {errors.email && <p className="text-red-600">{errors.email.message}</p>}
 
       <Input
         type="password"
         placeholder="Password"
-        {...register("password", { required: true })}
+        {...register("password", { required: "Password is required" })}
       />
-      {errors.password && <p className="text-red-600">Password is required</p>}
+      {errors.password && (
+        <p className="text-red-600">{errors.password.message}</p>
+      )}
 
-      <Button type="submit" disabled={mutation.status === "pending"}>
-        {mutation.status === "pending" ? "Logging in..." : "Login"}
-      </Button>
+      {isError && <p className="text-red-600">Incorrect email or password</p>}
+
+      <div className="flex justify-between items-center pt-2">
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? "Logging in..." : "Login"}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/register")}
+        >
+          Register
+        </Button>
+      </div>
     </form>
   );
 }

@@ -6,24 +6,26 @@ import { useRouter } from "next/navigation";
 import { Button } from "../shared/button";
 import { useQueryClient } from "@tanstack/react-query";
 
-export default function Header() {
+const Header = () => {
   const { user, isLoading } = useAuth();
   const qc = useQueryClient();
   const router = useRouter();
 
-  function handleLogout() {
+  const handleLogout = () => {
     localStorage.removeItem("token");
     qc.setQueryData(["me"], null);
     router.push("/login");
-  }
+  };
 
   return (
     <nav className="bg-white border-b p-4 flex justify-between items-center">
       <Link href="/" className="text-xl font-bold">
         Dental Scheduler
       </Link>
+
       <div className="space-x-4">
         <Link href="/booking">Booking</Link>
+
         {isLoading ? null : user ? (
           <>
             <Link href="/dashboard">Dashboard</Link>
@@ -37,4 +39,6 @@ export default function Header() {
       </div>
     </nav>
   );
-}
+};
+
+export default Header;
