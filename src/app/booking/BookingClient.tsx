@@ -74,24 +74,44 @@ export default function BookingPage() {
 
     setDay(data.date.toISOString().slice(0, 10));
 
+    const selectedStart = data.date;
+    const selectedEnd = new Date(selectedStart.getTime() + 60 * 60 * 1000);
+
+    const overlapping = (availQuery.data || []).some((appt) => {
+      const apptStart = new Date(appt.startTs);
+      const apptEnd = new Date(appt.endTs);
+
+      return (
+        (selectedStart >= apptStart && selectedStart < apptEnd) ||
+        (selectedEnd > apptStart && selectedEnd <= apptEnd) ||
+        (selectedStart <= apptStart && selectedEnd >= apptEnd)
+      );
+    });
+
+    if (overlapping) {
+      alert("❌ Schedule no longer available. Please choose another time.");
+      return;
+    }
+
     try {
       if (existingId) {
         await updateMutation.mutateAsync({
           id: existingId,
           dentistId: data.dentistId,
-          startTs: data.date.toISOString(),
-          endTs: new Date(data.date.getTime() + 60 * 60 * 1000).toISOString(),
+          startTs: selectedStart.toISOString(),
+          endTs: selectedEnd.toISOString(),
         });
       } else {
         await bookMutation.mutateAsync({
           dentistId: data.dentistId,
-          startTs: data.date.toISOString(),
-          endTs: new Date(data.date.getTime() + 60 * 60 * 1000).toISOString(),
+          startTs: selectedStart.toISOString(),
+          endTs: selectedEnd.toISOString(),
         });
       }
       router.push("/dashboard");
     } catch (err: unknown) {
       console.error(err);
+      alert("Something went wrong while booking.");
     }
   };
 
