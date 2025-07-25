@@ -16,6 +16,7 @@
 
 - **Purpose**: A Next.js app (client-side navigation) for patients to view dentists, book appointments.
 - **Assumptions**:
+  - **PROJECT PRIORITY**: Focused on trying to build as much as functionality as possible as described on the test instructions sent of the PDF. A lot of improvements required.
   - Auth: JWT stored in localStorage, sent on each request in the Authorization header.
   - Backend API is available at `https://<CF_DIST>.cloudfront.net/api`.
   - No SSR; purely client-side rendering.
@@ -31,17 +32,28 @@
 ## System Architecture
 
 ```plaintext
-┌───────────────┐        HTTPS         ┌───────────────────┐
-│  Netlify CDN  │◀───────────────────▶│  CloudFront + ELB │
-│ (React assets)│                      │  (Express API)    │
-└───────────────┘                      └───────────────────┘
+┌───────────────┐        HTTPS         ┌──────────────────────┐
+│  Frontend App │◀───────────────────▶│      CloudFront       │
+│ (Netlify/Vercel)│                    │                       │
+└───────────────┘                      └──────────────────────┘
                                            │
-                                           │ talks to
+                                           │ HTTPS
                                            ▼
-                               ┌────────────────────────┐
-                               │   Amazon RDS (Postgres)│
-                               │ via Prisma ORM         │
-                               └────────────────────────┘
+                             ┌────────────────────────────┐
+                             │   EKS Cluster (Express)    │
+                             │ ┌────────────────────────┐ │
+                             │ │ Pods:                  │ │
+                             │ │ - auth-service         │ │
+                             │ │ - dentist-service      │ │
+                             │ │ - appointment-service  │ │
+                             │ └────────────────────────┘ │
+                             └────────────────────────────┘
+                                           │
+                                           │ Prisma over TCP
+                                           ▼
+                               ┌──────────────────────────┐
+                               │   Amazon RDS (Postgres)  │
+                               └──────────────────────────┘
 ```
 
 ## Tech Stack & Tools
