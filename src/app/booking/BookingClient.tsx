@@ -18,9 +18,17 @@ import {
   SelectContent,
   SelectItem,
 } from "../../components/shared/select";
+
 export interface BookingForm {
   dentistId: string;
   date: Date | null;
+}
+
+function formatLocalDate(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export default function BookingPage() {
@@ -39,6 +47,7 @@ export default function BookingPage() {
 
   const {
     control,
+    watch,
     handleSubmit,
     setValue,
     formState: { errors },
@@ -52,19 +61,23 @@ export default function BookingPage() {
   useEffect(() => {
     if (existingStart) {
       const d = new Date(existingStart);
-      setDay(d.toISOString().slice(0, 10));
+      setDay(formatLocalDate(d));
     }
     if (existingDentist) {
       setValue("dentistId", existingDentist);
     }
   }, [existingDentist, existingStart, setValue]);
 
-  const selectedDentist = control._formValues?.dentistId;
+  const selectedDentist = watch("dentistId");
   const availQuery = useAvailability({ dentistId: selectedDentist, date: day });
 
+  const otherAppointments = useMemo(
+    () => (availQuery.data || []).filter((appt) => appt.id !== existingId),
+    [availQuery.data, existingId]
+  );
   const excludeTimes = useMemo(
-    () => (availQuery.data || []).map((appt) => new Date(appt.startTs)),
-    [availQuery.data]
+    () => otherAppointments.map((appt) => new Date(appt.startTs)),
+    [otherAppointments]
   );
 
   const onSubmit = async (data: BookingForm) => {
@@ -72,15 +85,19 @@ export default function BookingPage() {
     if (!token) return router.push("/login");
     if (!data.date) return;
 
-    setDay(data.date.toISOString().slice(0, 10));
+    const dayStr = formatLocalDate(data.date);
+    setDay(dayStr);
+
+    const { data: latest = [] } = await availQuery.refetch();
+
+    const others = latest.filter((appt) => appt.id !== existingId);
 
     const selectedStart = data.date;
     const selectedEnd = new Date(selectedStart.getTime() + 60 * 60 * 1000);
 
-    const overlapping = (availQuery.data || []).some((appt) => {
+    const overlapping = others.some((appt) => {
       const apptStart = new Date(appt.startTs);
       const apptEnd = new Date(appt.endTs);
-
       return (
         (selectedStart >= apptStart && selectedStart < apptEnd) ||
         (selectedEnd > apptStart && selectedEnd <= apptEnd) ||
@@ -89,7 +106,7 @@ export default function BookingPage() {
     });
 
     if (overlapping) {
-      alert("❌ Schedule no longer available. Please choose another time.");
+      alert("Schedule no longer available. Please choose another time.");
       return;
     }
 
@@ -163,7 +180,7 @@ export default function BookingPage() {
                 selected={field.value}
                 onChange={(d) => {
                   field.onChange(d);
-                  if (d) setDay(d.toISOString().slice(0, 10));
+                  if (d) setDay(formatLocalDate(d));
                 }}
                 showTimeSelect
                 timeIntervals={60}
